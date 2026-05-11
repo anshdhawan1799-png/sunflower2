@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nancy sleeping on a Humongous Sunflower</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            /* Prevents horizontal scrolling */
+            overflow-x: hidden;
+            background-color: #000;
+        }
+        
+        /* The container determines how long the user can scroll. 
+           1000vh creates a long scrollable space for smooth playback. */
+        #scroll-container {
+            height: 1000vh;
+        }
+
+        /* Fixed canvas that acts as our video player */
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Loading Screen Styles */
+        #loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            color: white;
+            font-family: sans-serif;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .progress-bar-container {
+            width: 250px;
+            height: 6px;
+            background: #333;
+            border-radius: 9999px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: #fff;
+            transition: width 0.1s ease-out;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen -->
+    <div id="loader">
+        <div class="text-xl font-medium tracking-widest uppercase mb-2">Loading Sequence</div>
+        <div id="progress-text" class="text-sm text-gray-400">0%</div>
+        <div class="progress-bar-container">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <button id="start-btn" class="hidden mt-6 px-6 py-2 border border-white text-white rounded hover:bg-white hover:text-black transition-colors cursor-pointer tracking-wider">Start Experience</button>
+    </div>
+
+    <!-- Background Audio -->
+    <audio id="bg-audio" loop>
+        <source src="https://ik.imagekit.io/ipklrngh3r/Sunflower/Post%20Malone,%20Swae%20Lee%20-%20Sunflower%20(Spider-Man_%20Into%20the%20Spider-Verse).mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- The Canvas where images are drawn -->
+    <canvas id="sequence-canvas"></canvas>
+
+    <!-- Invisible div to create scrollable space -->
+    <div id="scroll-container"></div>
+
+    <!-- White Rectangle Overlay for the Logo -->
+    <div class="fixed bottom-0 left-0 w-full bg-white h-16 flex items-center justify-center z-20 shadow-[0_-10px_20px_rgba(0,0,0,0.1)] px-4">
+        <p class="text-black text-xs font-semibold tracking-wide text-center">
+            Title: Nancy sleeping on a Humongous Sunflower by Ansh
+        </p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("sequence-canvas");
+        const context = canvas.getContext("2d");
+        
+        // Sequence configuration
+        const totalFolders = 5;
+        const framesPerFolder = 192; // Assuming standard ezgif max slice logic (000 to 191)
+        const totalFrames = totalFolders * framesPerFolder;
+        
+        // Target folder names URL encoded
+        const folderNames = [
+            "ezgif-split",
+            "ezgif-split%20(1)",
+            "ezgif-split%20(2)",
+            "ezgif-split%20(3)",
+            "ezgif-split%20(4)"
+        ];
+
+        const imageUrls = [];
+
+        // Generate URLs dynamically based on the 5 folders
+        for (let i = 0; i < totalFolders; i++) {
+            for (let j = 0; j < framesPerFolder; j++) {
+                // Pad frame index to 3 digits (e.g. 0 -> "000", 15 -> "015")
+                const paddedIndex = j.toString().padStart(3, '0');
+                const url = `https://ik.imagekit.io/ipklrngh3r/Sunflower/${folderNames[i]}/frame_${paddedIndex}_delay-0.042s.webp`;
+                imageUrls.push(url);
+            }
+        }
+
+        const images = new Array(totalFrames);
+        let loadedImagesCount = 0;
+        let currentFrameIndex = 0;
+
+        // Resize Canvas to fit screen window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            renderFrame(currentFrameIndex);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Complex draw function to mimic css "object-fit: cover" for Canvas
+        function drawImageProp(ctx, img, x, y, w, h, offsetX, offsetY) {
+            if (arguments.length === 2) {
+                x = y = 0;
+                w = ctx.canvas.width;
+                h = ctx.canvas.height;
+            }
+
+            // Defaults to center
+            offsetX = typeof offsetX === "number" ? offsetX : 0.5;
+            offsetY = typeof offsetY === "number" ? offsetY : 0.5;
+
+            // Keep bounds [0.0, 1.0]
+            offsetX = Math.max(0, Math.min(1, offsetX));
+            offsetY = Math.max(0, Math.min(1, offsetY));
+
+            let iw = img.width,
+                ih = img.height,
+                r = Math.min(w / iw, h / ih),
+                nw = iw * r,
+                nh = ih * r,
+                cx, cy, cw, ch, ar = 1;
+
+            if (nw < w) ar = w / nw;
+            if (Math.abs(ar - 1) < 1e-14 && nh < h) ar = h / nh;
+            nw *= ar;
+            nh *= ar;
+
+            cw = iw / (nw / w);
+            ch = ih / (nh / h);
+
+            cx = (iw - cw) * offsetX;
+            cy = (ih - ch) * offsetY;
+
+            // Enforce source boundaries
+            cx = Math.max(0, cx);
+            cy = Math.max(0, cy);
+            cw = Math.min(iw, cw);
+            ch = Math.min(ih, ch);
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.drawImage(img, cx, cy, cw, ch,  x, y, w, h);
+        }
+
+        // Render specific frame
+        function renderFrame(index) {
+            // Check if image exists, is loaded, and isn't broken (naturalWidth > 0)
+            if (images[index] && images[index].complete && images[index].naturalWidth !== 0) {
+                drawImageProp(context, images[index]);
+            }
+        }
+
+        // Audio and Image Loading Logic
+        let isImagesReady = false;
+        const LOAD_THRESHOLD = 30; // Let the user start scrolling after 30 frames are ready
+
+        function checkExperienceReady() {
+            if (isImagesReady) {
+                const startBtn = document.getElementById('start-btn');
+                const progressContainer = document.querySelector('.progress-bar-container');
+                
+                if (startBtn.classList.contains('hidden')) {
+                    startBtn.classList.remove('hidden');
+                    document.getElementById('progress-text').innerText = "Ready!";
+                    progressContainer.style.display = 'none';
+                    
+                    startBtn.addEventListener('click', () => {
+                        const bgAudio = document.getElementById('bg-audio');
+                        bgAudio.play(); // Safely start direct MP3 audio on user click
+                        
+                        const loader = document.getElementById('loader');
+                        loader.style.opacity = '0';
+                        setTimeout(() => loader.style.display = 'none', 500);
+                    });
+                }
+            }
+        }
+
+        // 2. Sequential Image Loading (Fixes slow loading issue)
+        function initLoading() {
+            const maxConcurrentLoads = 10;
+            let loadIndex = 0;
+
+            function loadNext() {
+                if (loadIndex >= totalFrames) return;
+                
+                const i = loadIndex++;
+                const img = new Image();
+                
+                img.onload = img.onerror = () => {
+                    loadedImagesCount++;
+                    updateProgress();
+                    
+                    if (i === 0) renderFrame(0); // Render first frame ASAP
+                    
+                    loadNext(); // Trigger next download only after this one completes
+                };
+
+                img.src = imageUrls[i];
+                images[i] = img; // Ensure images are placed in correct order
+            }
+
+            // Kick off a set of parallel loaders
+            for (let i = 0; i < Math.min(maxConcurrentLoads, totalFrames); i++) {
+                loadNext();
+            }
+
+            function updateProgress() {
+                const percent = Math.floor((loadedImagesCount / totalFrames) * 100);
+                
+                document.getElementById('progress-text').innerText = `${percent}%`;
+                document.getElementById('progress-bar').style.width = `${percent}%`;
+                
+                if (loadedImagesCount >= Math.min(LOAD_THRESHOLD, totalFrames) && !isImagesReady) {
+                    isImagesReady = true;
+                    checkExperienceReady();
+                }
+            }
+        }
+
+        // Call initializer
+        initLoading();
+
+        // Scroll listener logic to sync sequence frame
+        window.addEventListener('scroll', () => {
+            const scrollTop = document.documentElement.scrollTop;
+            const maxScrollTop = document.documentElement.scrollHeight - window.innerHeight;
+            
+            if (maxScrollTop <= 0) return;
+
+            const scrollFraction = scrollTop / maxScrollTop;
+            
+            // Map scroll fraction safely to a frame index
+            const frameIndex = Math.min(
+                totalFrames - 1,
+                Math.max(0, Math.floor(scrollFraction * totalFrames))
+            );
+            
+            // Only re-render if the frame changed
+            if (frameIndex !== currentFrameIndex) {
+                currentFrameIndex = frameIndex;
+                requestAnimationFrame(() => renderFrame(frameIndex));
+            }
+        });
+    </script>
+</body>
+</html>
